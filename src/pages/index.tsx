@@ -1,17 +1,16 @@
 import { GetStaticProps } from 'next';
-import Link from 'next/link';
 import Head from 'next/head';
-import { FiCalendar, FiUsers } from 'react-icons/fi';
+import { FiCalendar, FiUser } from 'react-icons/fi';
 import Prismic from '@prismicio/client';
-import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import Header from '../components/Header';
-
+import Link from 'next/link';
+import { ReactElement, useState } from 'react';
 import { getPrismicClient } from '../services/prismic';
 
 import commonStyles from '../styles/common.module.scss';
 import styles from './home.module.scss';
+import Header from '../components/Header';
 
 interface Post {
   uid?: string;
@@ -30,9 +29,13 @@ interface PostPagination {
 
 interface HomeProps {
   postsPagination: PostPagination;
+  preview: boolean;
 }
 
-export default function Home({ postsPagination }: HomeProps): JSX.Element {
+export default function Home({
+  postsPagination,
+  preview,
+}: HomeProps): ReactElement {
   const formattedPost = postsPagination.results.map(post => {
     return {
       ...post,
@@ -45,6 +48,7 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
       ),
     };
   });
+
   const [posts, setPosts] = useState<Post[]>(formattedPost);
   const [nextPage, setNextPage] = useState(postsPagination.next_page);
   const [currentPage, setCurrentPage] = useState(1);
@@ -53,6 +57,7 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
     if (currentPage !== 1 && nextPage === null) {
       return;
     }
+
     const postsResults = await fetch(`${nextPage}`).then(response =>
       response.json()
     );
@@ -76,15 +81,19 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
         },
       };
     });
+
     setPosts([...posts, ...newPosts]);
   }
+
   return (
     <>
       <Head>
-        <title>Home | spaceTraveling</title>
+        <title>Home | spacetraveling</title>
       </Head>
+
       <main className={commonStyles.container}>
         <Header />
+
         <div className={styles.posts}>
           {posts.map(post => (
             <Link href={`/post/${post.uid}`} key={post.uid}>
@@ -97,32 +106,44 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
                     {post.first_publication_date}
                   </li>
                   <li>
-                    <FiUsers />
+                    <FiUser />
                     {post.data.author}
                   </li>
                 </ul>
               </a>
             </Link>
           ))}
+
           {nextPage && (
             <button type="button" onClick={handleNextPage}>
               Carregar mais posts
             </button>
           )}
         </div>
+
+        {preview && (
+          <aside>
+            <Link href="/api/exit-preview">
+              <a className={commonStyles.preview}>Sair do modo Preview</a>
+            </Link>
+          </aside>
+        )}
       </main>
     </>
   );
 }
 
-export const getStaticProps: GetStaticProps = async () => {
+export const getStaticProps: GetStaticProps = async ({ preview = false }) => {
   const prismic = getPrismicClient();
+
   const postsResponse = await prismic.query(
     [Prismic.Predicates.at('document.type', 'posts')],
     {
       pageSize: 1,
+      orderings: '[document.last_publication_date desc]',
     }
   );
+
   const posts = postsResponse.results.map(post => {
     return {
       uid: post.uid,
@@ -139,9 +160,12 @@ export const getStaticProps: GetStaticProps = async () => {
     next_page: postsResponse.next_page,
     results: posts,
   };
+
   return {
     props: {
       postsPagination,
+      preview,
     },
+    revalidate: 1800,
   };
 };
